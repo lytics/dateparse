@@ -5,6 +5,7 @@ package dateparse
 
 import (
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 	"time"
@@ -170,15 +171,14 @@ func ParseIn(datestr string, loc *time.Location, opts ...ParserOption) (time.Tim
 // Set Location to time.Local.  Same as ParseIn Location but lazily uses
 // the global time.Local variable for Location argument.
 //
-//     denverLoc, _ := time.LoadLocation("America/Denver")
-//     time.Local = denverLoc
+//	denverLoc, _ := time.LoadLocation("America/Denver")
+//	time.Local = denverLoc
 //
-//     t, err := dateparse.ParseLocal("3/1/2014")
+//	t, err := dateparse.ParseLocal("3/1/2014")
 //
 // Equivalent to:
 //
-//     t, err := dateparse.ParseIn("3/1/2014", denverLoc)
-//
+//	t, err := dateparse.ParseIn("3/1/2014", denverLoc)
 func ParseLocal(datestr string, opts ...ParserOption) (time.Time, error) {
 	p, err := parseTime(datestr, time.Local, opts...)
 	if err != nil {
@@ -204,9 +204,8 @@ func MustParse(datestr string, opts ...ParserOption) time.Time {
 // ParseFormat parse's an unknown date-time string and returns a layout
 // string that can parse this (and exact same format) other date-time strings.
 //
-//     layout, err := dateparse.ParseFormat("2013-02-01 00:00:00")
-//     // layout = "2006-01-02 15:04:05"
-//
+//	layout, err := dateparse.ParseFormat("2013-02-01 00:00:00")
+//	// layout = "2006-01-02 15:04:05"
 func ParseFormat(datestr string, opts ...ParserOption) (string, error) {
 	p, err := parseTime(datestr, nil, opts...)
 	if err != nil {
@@ -714,7 +713,7 @@ iterRunes:
 				break
 			}
 		case dateDigitDot:
-			// This is the 2nd period
+			// This might be the 2nd period
 			// 3.31.2014
 			// 08.21.71
 			// 2014.05
@@ -733,6 +732,18 @@ iterRunes:
 					p.dayi = i + 1
 					p.setMonth()
 					p.stateDate = dateDigitDotDot
+				}
+			}
+			// This is likely a unix-ish timestamp in scientific notation
+			// 1.384216367111e+12
+			if r == 'e' {
+				// try to convert to an int64
+				if f, err := strconv.ParseFloat(datestr, 64); err == nil {
+					bf := big.NewFloat(f)
+					bi, _ := bf.Int(nil)
+					datestr = bi.String()
+					p.stateDate = dateDigit
+					break iterRunes
 				}
 			}
 		case dateDigitDotDot:
